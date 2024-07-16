@@ -4,25 +4,26 @@ ARG KUBERNETES_VERSION=dev
 FROM rancher/hardened-build-base:v1.22.4b1 AS build
 ARG DAPPER_HOST_ARCH
 ENV ARCH $DAPPER_HOST_ARCH
-RUN set -x && \
-    apk --no-cache add \
-    bash \
-    curl \
-    file \
-    git \
-    libseccomp-dev \
-    rsync \
-    gcc \
-    bsd-compat-headers \
-    py-pip \
-    py3-pip \
-    pigz \
-    tar \
-    yq \
-    helm
+RUN zypper refresh && \
+    zypper update -y && \
+    zypper install -y
+      bash \
+      curl \
+      file \
+      git \
+      libseccomp-dev \
+      rsync \
+      gcc \
+      bsd-compat-headers \
+      py-pip \
+      py3-pip \
+      pigz \
+      tar \
+      yq \
+      helm
 
 RUN if [ "${ARCH}" = "amd64" ]; then \
-    	apk --no-cache add mingw-w64-gcc; \
+    	zypper install -y mingw-w64-gcc; \
     fi
 
 FROM registry.suse.com/bci/bci-base AS rpm-macros
@@ -51,13 +52,13 @@ RUN curl -sL https://dl.k8s.io/release/$( \
 RUN python3 -m pip install awscli
 RUN curl -sL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s v1.55.2
 RUN set -x && \
-    apk --no-cache add \
+    zypper install -y \
     libarchive-tools \
     zstd \
     jq \
     python3 && \
     if [ "${ARCH}" != "s390x" ] || [ "${GOARCH}" != "arm64" ]; then \
-    	apk add --no-cache rpm-dev; \
+    	zypper install -y rpm-dev; \
     fi
 
 RUN GOCR_VERSION="v0.5.1" && \
@@ -81,7 +82,7 @@ COPY --from=rpm-macros /usr/lib/rpm/macros.d/macros.systemd /usr/lib/rpm/macros.
 # Shell used for debugging
 FROM dapper AS shell
 RUN set -x && \
-    apk --no-cache add \
+    zypper install -y \
     bash-completion \
     iptables \
     less \

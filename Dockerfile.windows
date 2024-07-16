@@ -1,6 +1,6 @@
-FROM alpine:3.20 AS build
+FROM registry.suse.com/bci/bci-base AS build
 
-RUN apk --no-cache add \
+RUN zypper install -y \
     curl \
     unzip
 
@@ -13,9 +13,9 @@ ENV DAPPER_OUTPUT ./dist ./bin ./build
 ENV DAPPER_DOCKER_SOCKET true
 ENV DAPPER_TARGET dapper
 ENV DAPPER_RUN_ARGS "--privileged --network host -v /tmp:/tmp -v rke2-pkg:/go/pkg -v rke2-cache:/root/.cache/go-build"
-RUN apk update
+RUN zypper refresh && zypper update
 RUN set -x && \
-    apk add --no-cache \
+    zypper install -y \
     mingw-w64-gcc \
     libarchive-tools \
     gcc \
