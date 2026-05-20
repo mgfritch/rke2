@@ -1,6 +1,6 @@
 #!/bin/bash
 
-GITHUB_REPOSITORY="rancher/rke2"
+GITHUB_REPOSITORY="mgfritch/rke2"
 CHART_VERSIONS_FILE="charts/chart_versions.yaml"
 CHART_NAME=${1}
 CHART_VERSION=${2}

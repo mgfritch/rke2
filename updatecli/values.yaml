@@ -1,5 +1,5 @@
 github:
-  owner: "rancher" 
+  owner: "mgfritch"
   repo: "rke2"
   user: "github-actions[bot]"
   email: "41898282+github-actions[bot]@users.noreply.github.com"
