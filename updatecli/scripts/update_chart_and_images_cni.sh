@@ -104,7 +104,7 @@ $0 ~ pattern {
 
 update_chart_images_windows() {
     app_version="${2%??}"
-    gh_state_dir=$(mktemp -d)
+    gh_state_dir=$(mktemp -d -t gh_state_dir.XXXXXX)
     export GH_CONFIG_DIR="${gh_state_dir}/gh-config"
     export XDG_CONFIG_HOME="${gh_state_dir}/xdg-config"
     export XDG_STATE_HOME="${gh_state_dir}/xdg-state"
