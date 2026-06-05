@@ -104,7 +104,6 @@ $0 ~ pattern {
 
 update_chart_images_windows() {
     app_version="${2%??}"
-    tempdir=$(mktemp -d)
     gh_state_dir=$(mktemp -d)
     export GH_CONFIG_DIR="${gh_state_dir}/gh-config"
     export XDG_CONFIG_HOME="${gh_state_dir}/xdg-config"
@@ -138,7 +137,7 @@ update_chart_images_windows() {
           sed -i "s/ENV CALICO_VERSION=.*/ENV CALICO_VERSION=\"$app_version\"/g" Dockerfile.windows
 	  ;;
     esac
-    rm -rf $tempdir/ "$gh_state_dir"
+    rm -rf "$gh_state_dir"
 }
 
 CHART_VERSIONS_FILE="charts/chart_versions.yaml"
