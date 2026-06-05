@@ -1,6 +1,5 @@
 /.dapper
 /.cache
-# XDG state/config/data/cache dirs that tools like `gh` may write into the worktree
 /.local/
 /.config/
 /bin
