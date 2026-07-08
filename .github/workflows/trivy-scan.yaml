@@ -13,6 +13,9 @@ jobs:
   trivy_scan:
     if: github.event.workflow_run.conclusion == 'success'
     runs-on: ${{ github.repository == 'rancher/rke2' && 'runs-on,runner=4cpu-linux-x64' || 'ubuntu-latest' }}
+    permissions:
+      contents: read
+      id-token: write
     outputs:
       pr_number: ${{ steps.pr_context.outputs.pr_number }}
       
@@ -55,8 +58,60 @@ jobs:
             exit 1
           fi
           echo "pr_number=$pr_number" >> $GITHUB_OUTPUT
+          actor=$(cat pr-context/actor | grep -oE '^[A-Za-z0-9_.-]+$')
+          if [ -z "$actor" ]; then
+            echo "Invalid actor"
+            exit 1
+          fi
+          echo "actor=$actor" >> $GITHUB_OUTPUT
           mkdir -p build
           mv pr-context/images*.txt build/
+
+      - name: Read Secrets
+        uses: rancher-eio/read-vault-secrets@7282bf97898cd1c16c89f837e0bb442e6d384c89 # v3
+        with:
+          secrets: |
+            secret/data/github/repo/${{ github.repository }}/github/app-credentials appId | APP_ID ;
+            secret/data/github/repo/${{ github.repository }}/github/app-credentials privateKey | PRIVATE_KEY
+
+      - name: Generate App Token
+        uses: actions/create-github-app-token@f8d387b68d61c58ab83c6c016672934102569859 # v3
+        id: app-token
+        with:
+          app-id: ${{ env.APP_ID }}
+          private-key: ${{ env.PRIVATE_KEY }}
+
+      - name: Clear app credentials from environment
+        run: |
+          echo "APP_ID=" >> "$GITHUB_ENV"
+          echo "PRIVATE_KEY=" >> "$GITHUB_ENV"
+
+      - name: Verify actor is an active member of rancher organization
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          ACTOR: ${{ steps.pr_context.outputs.actor }}
+        with:
+          # Uses the GitHub App installation token (generated above) instead of GITHUB_TOKEN.
+          # The GitHub App must have read:org (or Members: read) permission to call
+          # getMembershipForUser and resolve private org membership.
+          github-token: ${{ steps.app-token.outputs.token }}
+          script: |
+            const org = 'rancher';
+            const actor = process.env.ACTOR;
+
+            try {
+              const result = await github.rest.orgs.getMembershipForUser({
+                org,
+                username: actor,
+              });
+              if (result.data.state !== 'active') {
+                core.setFailed(`User ${actor} is not an active member of the ${org} organization`);
+                return;
+              }
+            } catch (error) {
+              core.setFailed(`User ${actor} is not a member of the ${org} organization: ${error.message}`);
+              return;
+            }
 
       - name: Load RKE2 runtime image
         run: docker load -i pr-context/rke2-runtime.tar

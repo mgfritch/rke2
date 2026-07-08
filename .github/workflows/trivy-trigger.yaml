@@ -1,10 +1,16 @@
 name: Trivy Scan Trigger
 
 # This workflow is triggered when a pull request is labeled with 'scan-with-trivy'.
-# This can only be initiated by a user with active rancher org membership (public or private) and write permissions.
-# It isolates the build of RKE2 within an unprivileged environment.
-# The follow-up workflow will then use the artifacts created here to run the scan
-# and report the results back to the PR.
+# It runs under the pull_request event and therefore operates in an unprivileged environment
+# with no access to repository secrets or OIDC — this is intentional to support forked PRs.
+#
+# Policy enforcement is split across two workflows:
+#   1. THIS workflow (pull_request): verifies the actor has write permission on the base repo
+#      via the default GITHUB_TOKEN (read-only, works on forks), builds the RKE2 image lists,
+#      and uploads a pr-context artifact containing pr_number and actor for the follow-up workflow.
+#   2. trivy-scan.yaml (workflow_run): runs in the trusted base-repository context where secrets
+#      and OIDC are available. It reads the artifact, verifies active rancher org membership via
+#      Vault + GitHub App token, and then performs the Trivy scan and posts results back to the PR.
 
 on:
   pull_request:
@@ -44,52 +50,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      id-token: write
     steps:
-      - name: Read Secrets
-        uses: rancher-eio/read-vault-secrets@7282bf97898cd1c16c89f837e0bb442e6d384c89 # v3
-        with:
-          secrets: |
-            secret/data/github/repo/${{ github.repository }}/github/app-credentials appId | APP_ID ;
-            secret/data/github/repo/${{ github.repository }}/github/app-credentials privateKey | PRIVATE_KEY
-
-      - name: Generate App Token
-        uses: actions/create-github-app-token@f8d387b68d61c58ab83c6c016672934102569859 # v3
-        id: app-token
-        with:
-          app-id: ${{ env.APP_ID }}
-          private-key: ${{ env.PRIVATE_KEY }}
-
-      - name: Clear app credentials from environment
-        run: |
-          echo "APP_ID=" >> "$GITHUB_ENV"
-          echo "PRIVATE_KEY=" >> "$GITHUB_ENV"
-
-      - name: Verify actor is an active member of rancher organization
-        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
-        with:
-          # Uses the GitHub App installation token (generated above) instead of GITHUB_TOKEN.
-          # The GitHub App must have read:org (or Members: read) permission to call
-          # getMembershipForUser and resolve private org membership.
-          github-token: ${{ steps.app-token.outputs.token }}
-          script: |
-            const org = 'rancher';
-            const actor = context.actor;
-
-            try {
-              const result = await github.rest.orgs.getMembershipForUser({
-                org,
-                username: actor,
-              });
-              if (result.data.state !== 'active') {
-                core.setFailed(`User ${actor} is not an active member of the ${org} organization`);
-                return;
-              }
-            } catch (error) {
-              core.setFailed(`User ${actor} is not a member of the ${org} organization: ${error.message}`);
-              return;
-            }
-
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
       
@@ -110,6 +71,7 @@ jobs:
         run: |
           mkdir -p pr-context
           echo "${{ github.event.pull_request.number }}" > pr-context/pr_number
+          echo "${{ github.actor }}" > pr-context/actor
           mv build/images-core.txt build/images-canal.txt build/images-flannel.txt build/images-ingress-nginx.txt pr-context
           mv rke2-runtime.tar pr-context/rke2-runtime.tar
 
