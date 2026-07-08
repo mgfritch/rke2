@@ -46,6 +46,9 @@ jobs:
       contents: read
       id-token: write
     steps:
+      # Read the GitHub App credentials from Vault. The App installation token
+      # generated below is used to call orgs.getMembershipForUser, which requires
+      # read:org (Members: read) permission — a scope not available on GITHUB_TOKEN.
       - name: Read Secrets
         uses: rancher-eio/read-vault-secrets@7282bf97898cd1c16c89f837e0bb442e6d384c89 # v3
         with:
@@ -53,6 +56,8 @@ jobs:
             secret/data/github/repo/${{ github.repository }}/github/app-credentials appId | APP_ID ;
             secret/data/github/repo/${{ github.repository }}/github/app-credentials privateKey | PRIVATE_KEY
 
+      # Generate an installation token for the GitHub App. The App must have
+      # read:org (Members: read) permission to resolve private org membership.
       - name: Generate App Token
         uses: actions/create-github-app-token@f8d387b68d61c58ab83c6c016672934102569859 # v3
         id: app-token
