@@ -63,16 +63,20 @@ jobs:
               return;
             }
 
-            const { data: { permission } } = await github.rest.repos.getCollaboratorPermissionLevel({
-              owner,
-              repo,
-              username: actor
-            });
-            
-             if (!['admin', 'maintain', 'write'].includes(permission)) {
-               core.setFailed(`User @${actor} does not have write (or higher) permission. Scan can only be triggered by repository collaborators with write access.`);
-               return;
-             }
+            try {
+              const { data: { permission } } = await github.rest.repos.getCollaboratorPermissionLevel({
+                owner,
+                repo,
+                username: actor
+              });
+              if (!['admin', 'maintain', 'write'].includes(permission)) {
+                core.setFailed(`User @${actor} does not have write (or higher) permission. Scan can only be triggered by repository collaborators with write access.`);
+                return;
+              }
+            } catch (error) {
+              core.setFailed(`Failed to check collaborator permission for ${actor}: ${error.message}`);
+              return;
+            }
       
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
