@@ -36,7 +36,9 @@ jobs:
       - name: Verify actor is a member of rancher organization and has write permissions
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         with:
-          # Uses the generated GitHub App token so private org membership can be checked.
+          # Uses the GitHub App installation token (generated above) instead of GITHUB_TOKEN.
+          # The GitHub App must have read:org (or Members: read) permission to call
+          # getMembershipForUser and resolve private org membership.
           github-token: ${{ steps.app-token.outputs.token }}
           script: |
             const org = 'rancher';
