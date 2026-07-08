@@ -2,8 +2,8 @@ name: Trivy Scan Trigger
 
 # This workflow is triggered when a pull request is labeled with 'scan-with-trivy'.
 # This can only be initiated by a user with active rancher org membership (public or private) and write permissions.
-# It isolates the built of RKE2 within a unprivileged enviroment. 
-# The follow up workflow will then use the artifacts created here to run the scan
+# It isolates the build of RKE2 within an unprivileged environment.
+# The follow-up workflow will then use the artifacts created here to run the scan
 # and report the results back to the PR.
 
 on:
@@ -65,10 +65,10 @@ jobs:
               username: actor
             });
             
-            if (permission !== 'admin' && permission !== 'write') {
-              core.setFailed(`User @${actor} does not have write permission. Scan can only be triggered by repository collaborators with write access.`);
-              return;
-            }
+             if (!['admin', 'maintain', 'write'].includes(permission)) {
+               core.setFailed(`User @${actor} does not have write (or higher) permission. Scan can only be triggered by repository collaborators with write access.`);
+               return;
+             }
       
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
