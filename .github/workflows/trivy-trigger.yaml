@@ -1,7 +1,7 @@
 name: Trivy Scan Trigger
 
 # This workflow is triggered when a pull request is labeled with 'scan-with-trivy'.
-# This can only be initiated by a user who is a member of the rancher organization and has write permissions.
+# This can only be initiated by a user with active rancher org membership (public or private) and write permissions.
 # It isolates the built of RKE2 within a unprivileged enviroment. 
 # The follow up workflow will then use the artifacts created here to run the scan
 # and report the results back to the PR.
@@ -21,18 +21,26 @@ jobs:
       - name: Verify actor is a member of rancher organization and has write permissions
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         with:
+          # Requires a token with `read:org` to see private org members.
+          # The secret must be configured in the repository or organization.
+          github-token: ${{ secrets.ORG_MEMBERSHIP_TOKEN }}
           script: |
             const org = 'rancher';
             const actor = context.actor;
             const { repo, owner } = context.repo; 
             
             try {
-              const result = await github.rest.orgs.checkMembershipForUser({
+              const result = await github.rest.orgs.getMembershipForUser({
                 org,
                 username: actor,
               });
+              if (result.data.state !== 'active') {
+                core.setFailed(`User ${actor} is not an active member of the ${org} organization`);
+                return;
+              }
             } catch (error) {
-              core.setFailed(`User ${actor} is not an public member of the ${org} organization`);
+              core.setFailed(`User ${actor} is not a member of the ${org} organization: ${error.message}`);
+              return;
             }
 
             const { data: { permission } } = await github.rest.repos.getCollaboratorPermissionLevel({
@@ -43,6 +51,7 @@ jobs:
             
             if (permission !== 'admin' && permission !== 'write') {
               core.setFailed(`User @${actor} does not have write permission. Scan can only be triggered by repository collaborators with write access.`);
+              return;
             }
       
       - name: Checkout repository
