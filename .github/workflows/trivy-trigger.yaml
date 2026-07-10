@@ -1,9 +1,9 @@
 name: Trivy Scan Trigger
 
 # This workflow is triggered when a pull request is labeled with 'scan-with-trivy'.
-# This can only be initiated by a user who is a member of the rancher organization and has write permissions.
-# It isolates the built of RKE2 within a unprivileged enviroment. 
-# The follow up workflow will then use the artifacts created here to run the scan
+# This can only be initiated by a user with active rancher org membership (public or private) and write permissions.
+# It isolates the build of RKE2 within an unprivileged environment.
+# The follow-up workflow will then use the artifacts created here to run the scan
 # and report the results back to the PR.
 
 on:
@@ -14,37 +14,87 @@ permissions:
   contents: read
 
 jobs:
-  trigger-scan:
+  check-permission:
     if: github.event.label.name == 'scan-with-trivy'
     runs-on: ubuntu-latest
     steps:
-      - name: Verify actor is a member of rancher organization and has write permissions
+      - name: Verify actor has write permissions
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         with:
           script: |
+            const { repo, owner } = context.repo;
+            const actor = context.actor;
+            try {
+              const { data: { permission } } = await github.rest.repos.getCollaboratorPermissionLevel({
+                owner,
+                repo,
+                username: actor
+              });
+              if (!['admin', 'maintain', 'write'].includes(permission)) {
+                core.setFailed(`User @${actor} does not have write (or higher) permission. Scan can only be triggered by repository collaborators with write access.`);
+                return;
+              }
+            } catch (error) {
+              core.setFailed(`Failed to check collaborator permission for ${actor}: ${error.message}`);
+              return;
+            }
+
+  trigger-scan:
+    needs: check-permission
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      # Read the GitHub App credentials from Vault. The App installation token
+      # generated below is used to call orgs.getMembershipForUser, which requires
+      # read:org (Members: read) permission — a scope not available on GITHUB_TOKEN.
+      - name: Read Secrets
+        uses: rancher-eio/read-vault-secrets@7282bf97898cd1c16c89f837e0bb442e6d384c89 # v3
+        with:
+          secrets: |
+            secret/data/github/repo/${{ github.repository }}/github/app-credentials appId | APP_ID ;
+            secret/data/github/repo/${{ github.repository }}/github/app-credentials privateKey | PRIVATE_KEY
+
+      # Generate an installation token for the GitHub App. The App must have
+      # read:org (Members: read) permission to resolve private org membership.
+      - name: Generate App Token
+        uses: actions/create-github-app-token@f8d387b68d61c58ab83c6c016672934102569859 # v3
+        id: app-token
+        with:
+          app-id: ${{ env.APP_ID }}
+          private-key: ${{ env.PRIVATE_KEY }}
+
+      - name: Clear app credentials from environment
+        run: |
+          echo "APP_ID=" >> "$GITHUB_ENV"
+          echo "PRIVATE_KEY=" >> "$GITHUB_ENV"
+
+      - name: Verify actor is an active member of rancher organization
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          # Uses the GitHub App installation token (generated above) instead of GITHUB_TOKEN.
+          # The GitHub App must have read:org (or Members: read) permission to call
+          # getMembershipForUser and resolve private org membership.
+          github-token: ${{ steps.app-token.outputs.token }}
+          script: |
             const org = 'rancher';
             const actor = context.actor;
-            const { repo, owner } = context.repo; 
-            
+
             try {
-              const result = await github.rest.orgs.checkMembershipForUser({
+              const result = await github.rest.orgs.getMembershipForUser({
                 org,
                 username: actor,
               });
+              if (result.data.state !== 'active') {
+                core.setFailed(`User ${actor} is not an active member of the ${org} organization`);
+                return;
+              }
             } catch (error) {
-              core.setFailed(`User ${actor} is not an public member of the ${org} organization`);
+              core.setFailed(`User ${actor} is not a member of the ${org} organization: ${error.message}`);
+              return;
             }
 
-            const { data: { permission } } = await github.rest.repos.getCollaboratorPermissionLevel({
-              owner,
-              repo,
-              username: actor
-            });
-            
-            if (permission !== 'admin' && permission !== 'write') {
-              core.setFailed(`User @${actor} does not have write permission. Scan can only be triggered by repository collaborators with write access.`);
-            }
-      
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
       
