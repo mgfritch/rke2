@@ -49,7 +49,7 @@ download_chart() {
 
     chart_tmp=$(mktemp --suffix .tar.gz)
     
-    curl -fsSL "${chart_url}" -o "${chart_tmp}"
+    curl -fsSL "${chart_url}" -o "${chart_tmp}" || exit 1
 
     echo $chart_tmp
 }
