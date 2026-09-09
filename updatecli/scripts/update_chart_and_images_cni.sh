@@ -16,20 +16,50 @@ fatal()
 
 HELM_REPO="https://rancher.github.io/rke2-charts"
 
-update_chart_version() {
-    info "updating chart ${1} in ${CHART_VERSIONS_FILE}"
-    CURRENT_VERSION=$(yq -r '.charts[] | select(.filename == "/charts/'"${1}"'.yaml") | .version' ${CHART_VERSIONS_FILE})
-    NEW_VERSION=${2}
-    if [ "${CURRENT_VERSION}" != "${NEW_VERSION}" ]; then
-        info "found version ${CURRENT_VERSION}, updating to ${NEW_VERSION}"
+# Update the version of a single chart entry, matched precisely by its
+# filename, without disturbing any other entry. The new version is written
+# using the same "v" prefix style as the entry's current value, since the
+# companion charts are published with differing conventions (e.g.
+# rke2-multus-vX.Y.ZZZ.tgz vs rke2-multus-crd-X.Y.ZZZ.tgz).
+update_entry_version() {
+    local name="${1}"
+    local new_version="${2}"
+    local current_version
+    current_version=$(yq -r '.charts[] | select(.filename == "/charts/'"${name}"'.yaml") | .version' ${CHART_VERSIONS_FILE})
+    if [ -z "${current_version}" ] || [ "${current_version}" == "null" ]; then
+        return
+    fi
+    # Match the current entry's prefix style: strip a leading "v" from the new
+    # version if the existing value has none, and add one if it does.
+    if [[ "${current_version}" == v* ]]; then
+        new_version="v${new_version#v}"
+    else
+        new_version="${new_version#v}"
+    fi
+    if [ "${current_version}" != "${new_version}" ]; then
+        info "found version ${current_version} for ${name}, updating to ${new_version}"
         chart_updated=true
         if test "$DRY_RUN" == "false"; then
-            sed -i "s/${CURRENT_VERSION}/${NEW_VERSION}/g" ${CHART_VERSIONS_FILE}
+            yq -i '(.charts[] | select(.filename == "/charts/'"${name}"'.yaml") | .version) = "'"${new_version}"'"' ${CHART_VERSIONS_FILE}
         else
             info "dry-run is enabled, no changes will occur"
         fi
     else
-        info "no new version found"
+        info "no new version found for ${name}"
+    fi
+}
+
+update_chart_version() {
+    info "updating chart ${1} in ${CHART_VERSIONS_FILE}"
+    update_entry_version "${1}" "${2}"
+    # Companion CRD charts (e.g. rke2-multus-crd) are tracked as a separate
+    # entry and must be bumped to the same numeric version as the primary
+    # chart. Update it too when such an entry exists.
+    local crd_version
+    crd_version=$(yq -r '.charts[] | select(.filename == "/charts/'"${1}"'-crd.yaml") | .version' ${CHART_VERSIONS_FILE})
+    if [ -n "${crd_version}" ] && [ "${crd_version}" != "null" ]; then
+        info "found companion crd chart ${1}-crd in ${CHART_VERSIONS_FILE}"
+        update_entry_version "${1}-crd" "${2}"
     fi
 }
 
