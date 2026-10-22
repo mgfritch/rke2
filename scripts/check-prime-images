@@ -1,0 +1,65 @@
+#!/usr/bin/env bash
+set -e
+
+cd "$(dirname "$0")/.."
+
+: "${REGISTRY:?REGISTRY must be set to the prime registry host}"
+
+# Mask the prime registry host so it never appears in the job log.
+echo "::add-mask::${REGISTRY}"
+
+# Source version.sh with its xtrace discarded so the host never leaks into the log.
+{ source ./scripts/version.sh; } 2>/dev/null
+{ set +x; } 2>/dev/null
+
+BUILD_DIR=${BUILD_DIR:-build}
+mkdir -p "$BUILD_DIR"
+
+# Regenerate the image lists without building or pulling
+if ! REGISTRY="${REGISTRY}" \
+    SKIP_BUILD_IMAGE_RUNTIME=true \
+    PULL_CMD=echo \
+    PULL_CMD_CORE=echo \
+    BUILD_DIR="${BUILD_DIR}" \
+    ./scripts/build-images > /dev/null 2>&1; then
+    echo "failed to generate prime image lists"
+    exit 1
+fi
+
+if [ -n "${PRIME_REGISTRY_USERNAME:-}" ] && [ -n "${PRIME_REGISTRY_PASSWORD:-}" ]; then
+    if ! printf '%s' "${PRIME_REGISTRY_PASSWORD}" | \
+            crane auth login "${REGISTRY}" -u "${PRIME_REGISTRY_USERNAME}" --password-stdin > /dev/null 2>&1; then
+        echo "authentication to the prime registry failed"
+        exit 2
+    fi
+fi
+
+# Verify runtime images not bundled via a helm chart
+IMAGES=$(cat "${BUILD_DIR}"/images*.txt | sort -u | grep -E \
+    -e '/rancher/klipper-helm:' \
+    -e '/rancher/klipper-lb:' \
+    -e '/rancher/mirrored-pause:')
+
+MISSING=0
+while IFS= read -r IMAGE; do
+    [ -z "$IMAGE" ] && continue
+
+    if ERR=$(crane digest "$IMAGE" 2>&1 > /dev/null); then
+        continue
+    fi
+
+    if echo "$ERR" | grep -qiE 'unauthorized|forbidden|denied|401|403'; then
+        echo "authentication to the prime registry failed while querying ${IMAGE#*/}"
+        exit 2
+    fi
+
+    echo "${IMAGE#*/} not found"
+    MISSING=1
+done <<< "$IMAGES"
+
+if [ "$MISSING" -ne 0 ]; then
+    echo "One or more externally-published prime images are missing from the prime registry"
+    exit 1
+fi
+
+echo "All externally-published prime images are present in the prime registry"
