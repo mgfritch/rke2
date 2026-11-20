@@ -25,8 +25,9 @@ sources:
   issue:
     name: "Get issue number"
     kind: "shell"
+    scmid: "rke2"
     spec:
-      command: bash ./updatecli/scripts/create-issue.sh rke2-flannel {{ source "flannel" }}
+      command: bash {{ requiredEnv "UPDATECLI_SCRIPTS_DIR" }}/create-issue.sh rke2-flannel {{ source "flannel" }}
       environments:
         - name: GH_TOKEN
           value: '{{ requiredEnv .github.token }}'
@@ -35,9 +36,10 @@ conditions:
   flannelVersionShouldBeUpdated:
     name: "Check if Flannel chart should be updated or not"
     kind: shell
+    scmid: "rke2"
     sourceid: flannel
     spec:
-      command: bash ./updatecli/scripts/validate_version.sh rke2-flannel
+      command: bash {{ requiredEnv "UPDATECLI_SCRIPTS_DIR" }}/validate_version.sh rke2-flannel
 
 targets:
   flannelCNI:
@@ -46,7 +48,7 @@ targets:
     scmid: "rke2"
     sourceid: flannel
     spec:
-      command: bash ./updatecli/scripts/update_chart_and_images_cni.sh rke2-flannel
+      command: bash {{ requiredEnv "UPDATECLI_SCRIPTS_DIR" }}/update_chart_and_images_cni.sh rke2-flannel
       environments:
         - name: GH_TOKEN
           value: '{{ requiredEnv .github.token }}'

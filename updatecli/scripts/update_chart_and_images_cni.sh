@@ -48,7 +48,7 @@ update_chart_images() {
 	   "rke2-cilium")
               IMAGES_TAG_AWS=$(helm template ${1} --repo ${HELM_REPO} --version ${2} --set eni.enabled=true |  yq -r '[.. | .image? | select(.)] | .[]' | sort -u)
 	      IMAGES_TAG_AZURE=$(helm template ${1} --repo ${HELM_REPO} --version ${2} --set azure.enabled=true |  yq -r '[.. | .image? | select(.)] | .[]' | sort -u)
-	      IMAGES_TAG_GENERIC=$(helm template ${1} --repo ${HELM_REPO} --version ${2} -f updatecli/scripts/cilium_values.yaml |  yq -r '[.. | .image? | select(.)] | .[]' | sort -u)
+	      IMAGES_TAG_GENERIC=$(helm template ${1} --repo ${HELM_REPO} --version ${2} -f "$(dirname "${BASH_SOURCE[0]}")/cilium_values.yaml" |  yq -r '[.. | .image? | select(.)] | .[]' | sort -u)
 	      IMAGES_TAG=$(echo "${IMAGES_TAG_AWS}"$'\n'"${IMAGES_TAG_AZURE}"$'\n'"${IMAGES_TAG_GENERIC}" | sort -u)
 	      ;;
 	   "rke2-multus")

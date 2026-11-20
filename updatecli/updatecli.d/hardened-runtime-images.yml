@@ -24,6 +24,7 @@ sources:
   kubernetesMinor:
     name: "Get Kubernetes minor version from scripts/version.sh"
     kind: "file"
+    scmid: "rke2"
     spec:
       file: scripts/version.sh
       matchpattern: '(?m)^KUBERNETES_VERSION=\$\{KUBERNETES_VERSION:-v\d+\.\d+\.\d+[^}]*\}$'
@@ -42,7 +43,7 @@ sources:
         kind: "regex"
         pattern: '^v1\.4\.\d+-build\d+$'
   hardenedContainerd:
-    name: "Latest hardened-containerd build"
+    name: "Latest hardened-containerd {{ .versions.containerd }} build"
     kind: "githubrelease"
     spec:
       owner: "rancher"
@@ -50,7 +51,7 @@ sources:
       token: '{{ requiredEnv .github.token }}'
       versionfilter:
         kind: "regex"
-        pattern: '^v2\.3\.\d+-k3s\d(?:\.\d+)?-build\d+$'
+        pattern: '^v{{ regexQuoteMeta .versions.containerd }}\.\d+-k3s\d(?:\.\d+)?-build\d+$'
   hardenedCrictl:
     name: "Latest hardened-crictl build"
     kind: "githubrelease"
@@ -76,7 +77,7 @@ sources:
         kind: "regex"
         pattern: '^v{{ source "kubernetesMinor" }}-r\d+-build\d+$'
   etcd:
-    name: "Latest etcd 3.7 build"
+    name: "Latest etcd {{ .versions.etcd }} build"
     kind: "githubrelease"
     spec:
       owner: "rancher"
@@ -84,7 +85,7 @@ sources:
       token: '{{ requiredEnv .github.token }}'
       versionfilter:
         kind: "regex"
-        pattern: '^v3\.7\.\d+-k3s\d+(?:\.\d+)?-build\d+$'
+        pattern: '^v{{ regexQuoteMeta .versions.etcd }}\.\d+-k3s\d+(?:\.\d+)?-build\d+$'
   hardenedContainerdWindowsChecksum:
     name: "Get containerd windows tarball checksum for the selected hardened-containerd build"
     kind: "shell"

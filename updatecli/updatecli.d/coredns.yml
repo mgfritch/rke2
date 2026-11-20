@@ -17,7 +17,7 @@ sources:
     name: "Get rke2-coredns chart version"
     kind: "shell"
     spec:
-      command: bash ./updatecli/scripts/retrieve_chart_version.sh rke2-coredns
+      command: bash {{ requiredEnv "UPDATECLI_SCRIPTS_DIR" }}/retrieve_chart_version.sh rke2-coredns
   corednsImage:
     name: "Get hardened-coredns tag from the selected chart"
     kind: "shell"
@@ -47,9 +47,10 @@ conditions:
   chartVersionShouldBeUpdated:
     name: "Check if CoreDNS chart should be updated"
     kind: "shell"
+    scmid: "rke2"
     sourceid: chart
     spec:
-      command: bash ./updatecli/scripts/validate_version.sh rke2-coredns
+      command: bash {{ requiredEnv "UPDATECLI_SCRIPTS_DIR" }}/validate_version.sh rke2-coredns
 
 targets:
   chartVersion:

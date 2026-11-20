@@ -20,7 +20,12 @@ sources:
       url: https://rancher.github.io/rke2-charts
       name: rke2-traefik
       versionfilter:
+{{- if .versions.traefik }}
+        kind: "semver"
+        pattern: "{{ .versions.traefik }}"
+{{- else }}
         kind: "latest"
+{{- end }}
   traefikImage:
     name: "Get hardened-traefik tag from the selected chart"
     kind: "shell"
@@ -31,9 +36,10 @@ conditions:
   chartVersionShouldBeUpdated:
     name: "Check if Traefik chart should be updated"
     kind: "shell"
+    scmid: "rke2"
     sourceid: chart
     spec:
-      command: bash ./updatecli/scripts/validate_version.sh rke2-traefik
+      command: bash {{ requiredEnv "UPDATECLI_SCRIPTS_DIR" }}/validate_version.sh rke2-traefik
 
 targets:
   chartVersion:

@@ -1,0 +1,14 @@
+# Branch-specific values for the updatecli run against release-1.36.
+# Shared settings live in updatecli/values.yaml.
+github:
+  branch: "release-1.36"
+versions:
+  # Minor lines tracked for hardened images and charts on this branch.
+  containerd: "2.3"
+  etcd: "3.6"
+  ingressNginx: "1.15.2"
+  # Empty means track the latest release.
+  calico: "3.32"
+  traefik: ">=40.0.0 <41.0.0"
+features:
+  multusCRD: false

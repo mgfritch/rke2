@@ -26,7 +26,7 @@ resolve_chart_version() {
     fi
 
     echo "[INFO]  no chart version provided for ${chart_name}; resolving latest from chart index" >&2
-    chart_version=$(bash ./updatecli/scripts/retrieve_chart_version.sh "${chart_name}")
+    chart_version=$(bash "$(dirname "${BASH_SOURCE[0]}")/retrieve_chart_version.sh" "${chart_name}")
     if [[ -z "${chart_version}" ]]; then
         fatal "failed to resolve chart version for ${chart_name}"
     fi

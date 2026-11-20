@@ -22,6 +22,7 @@ sources:
       name: rke2-multus
       versionfilter:
         kind: "latest"
+{{- if .features.multusCRD }}
   multusCRD:
     name: "Get Multus CRD chart version"
     kind: "helmchart"
@@ -30,11 +31,13 @@ sources:
       name: rke2-multus-crd
       versionfilter:
         kind: "latest"
+{{- end }}
   issue:
     name: "Get issue number"
     kind: "shell"
+    scmid: "rke2"
     spec:
-      command: bash ./updatecli/scripts/create-issue.sh rke2-multus {{ source "multus" }}
+      command: bash {{ requiredEnv "UPDATECLI_SCRIPTS_DIR" }}/create-issue.sh rke2-multus {{ source "multus" }}
       environments:
         - name: GH_TOKEN
           value: '{{ requiredEnv .github.token }}'
@@ -43,9 +46,10 @@ conditions:
   multusVersionShouldBeUpdated:
     name: "Check if Multus chart should be updated or not"
     kind: shell
+    scmid: "rke2"
     sourceid: multus
     spec:
-      command: bash ./updatecli/scripts/validate_version.sh rke2-multus
+      command: bash {{ requiredEnv "UPDATECLI_SCRIPTS_DIR" }}/validate_version.sh rke2-multus
 
 targets:
   multusCNI:
@@ -54,24 +58,26 @@ targets:
     scmid: "rke2"
     sourceid: multus
     spec:
-      command: bash ./updatecli/scripts/update_chart_and_images_cni.sh rke2-multus
+      command: bash {{ requiredEnv "UPDATECLI_SCRIPTS_DIR" }}/update_chart_and_images_cni.sh rke2-multus
       changedif:
         kind: file/checksum
         spec:
           files:
             - charts/chart_versions.yaml
+{{- if .features.multusCRD }}
   multusCRD:
     name: "Update the Multus CRD chart version"
     kind: "shell"
     scmid: "rke2"
     sourceid: multusCRD
     spec:
-      command: bash ./updatecli/scripts/update_chart_and_images_cni.sh rke2-multus-crd
+      command: bash {{ requiredEnv "UPDATECLI_SCRIPTS_DIR" }}/update_chart_and_images_cni.sh rke2-multus-crd
       changedif:
         kind: file/checksum
         spec:
           files:
             - charts/chart_versions.yaml
+{{- end }}
 
 actions:
   github:

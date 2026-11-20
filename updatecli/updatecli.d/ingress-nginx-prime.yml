@@ -9,12 +9,14 @@ name: "Update ingress-nginx chart and prime image"
 #
 # Both version patterns are pinned to the current nginx line on purpose, so a
 # nginx minor/patch bump stays a deliberate human change. When that line is
-# bumped, update the two versionfilter patterns below.
+# bumped, update the chart pattern below and `versions.ingressNginx` in the
+# branch's updatecli/values.d/<branch>.yaml.
 #
 # To test locally:
 #   have "UPDATECLI_GITHUB_ACTOR" env set to your github username
 #   have "UPDATECLI_GITHUB_TOKEN" env set to your github token
-#   updatecli diff --values updatecli/values.yaml --config updatecli/updatecli.d/ingress-nginx-prime.yml
+#   UPDATECLI_SCRIPTS_DIR=$PWD/updatecli/scripts updatecli diff --values updatecli/values.yaml \
+#     --values updatecli/values.d/master.yaml --config updatecli/updatecli.d/ingress-nginx-prime.yml
 scms:
   rke2:
     kind: "github"
@@ -53,13 +55,14 @@ sources:
         prerelease: false
       versionfilter:
         kind: "regex"
-        # -primeN CVE rebuilds of the pinned nginx v1.15.2 hardened line
-        pattern: 'v1\.15\.2-prime[0-9]+'
+        # -primeN CVE rebuilds of the pinned nginx hardened line
+        pattern: 'v{{ regexQuoteMeta .versions.ingressNginx }}-prime[0-9]+'
 
 conditions:
   ingressNginxEntry:
     name: "Verify chart_versions.yaml entry position"
     kind: "yaml"
+    scmid: "rke2"
     disablesourceinput: true
     spec:
       file: charts/chart_versions.yaml
@@ -71,9 +74,10 @@ conditions:
   primeRequiresChartBump:
     name: "Only update the prime image when the chart is updated"
     kind: "shell"
+    scmid: "rke2"
     sourceid: prime
     spec:
-      command: bash ./updatecli/scripts/validate_version.sh rke2-ingress-nginx '{{ source "chart" }}'
+      command: bash {{ requiredEnv "UPDATECLI_SCRIPTS_DIR" }}/validate_version.sh rke2-ingress-nginx '{{ source "chart" }}'
   verifyPrimeInChartValues:
     name: "Verify prime image is contained in the source chart's values.yaml"
     kind: "helmchart"

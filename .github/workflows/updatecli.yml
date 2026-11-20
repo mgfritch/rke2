@@ -6,6 +6,11 @@ on:
     - cron: '0 18 * * *'
   # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
+    inputs:
+      branch:
+        description: "Branch to update (e.g. release-1.36). Leave empty to update all branches in updatecli/values.d."
+        required: false
+        type: string
 
 permissions:
   contents: write
@@ -14,9 +19,69 @@ permissions:
   pull-requests: write
 
 jobs:
+  # The manifests and scripts on master drive every branch; each branch only
+  # supplies its own updatecli/values.d/<branch>.yaml.
+  branches:
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/master'
+    outputs:
+      branches: ${{ steps.list.outputs.branches }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          sparse-checkout: updatecli/values.d
+
+      - name: List branches
+        id: list
+        env:
+          BRANCH: ${{ inputs.branch }}
+        run: |
+          if [ -n "${BRANCH}" ]; then
+            if ! [[ "${BRANCH}" =~ ^(master|release-[0-9]+\.[0-9]+)$ ]] || [ ! -f "updatecli/values.d/${BRANCH}.yaml" ]; then
+              echo "::error::no updatecli/values.d/${BRANCH}.yaml for branch '${BRANCH}'"
+              exit 1
+            fi
+            branches=$(jq -cn --arg b "${BRANCH}" '[$b]')
+          else
+            branches=$(find updatecli/values.d -name '*.yaml' -exec basename {} .yaml \; | sort | jq -Rnc '[inputs]')
+          fi
+          echo "branches=${branches}" >> "${GITHUB_OUTPUT}"
+
+  cleanup-branches:
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/master'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Delete leftover UpdateCLI branches
+        run: |
+          gh pr list \
+            --search "is:closed is:pr head:updatecli_" \
+            --json headRefName \
+            --jq ".[].headRefName" | sort -u > closed_prs_branches.txt
+          gh pr list \
+            --search "is:open is:pr head:updatecli_" \
+            --json headRefName \
+            --jq ".[].headRefName" | sort -u > open_prs_branches.txt
+          for branch in $(comm -23 closed_prs_branches.txt open_prs_branches.txt); do
+            if (git ls-remote --exit-code --heads origin "$branch"); then
+              echo "Deleting leftover UpdateCLI branch - $branch";
+              git push origin --delete "$branch";
+            fi
+          done
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
   updatecli:
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/heads/release-1.')
+    needs: [branches, cleanup-branches]
+    strategy:
+      fail-fast: false
+      matrix:
+        branch: ${{ fromJSON(needs.branches.outputs.branches) }}
+    name: updatecli (${{ matrix.branch }})
     steps:
       - name: Checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
@@ -44,59 +109,16 @@ jobs:
       - name: Install Updatecli
         uses: updatecli/updatecli-action@93ae2608256484ef8598e902aa675bbc9e278e4e # v3.10.0
 
-      - name: Delete leftover UpdateCLI branches
-        run: |
-          gh pr list \
-            --search "is:closed is:pr head:updatecli_" \
-            --json headRefName \
-            --jq ".[].headRefName" | sort -u > closed_prs_branches.txt
-          gh pr list \
-            --search "is:open is:pr head:updatecli_" \
-            --json headRefName \
-            --jq ".[].headRefName" | sort -u > open_prs_branches.txt
-          for branch in $(comm -23 closed_prs_branches.txt open_prs_branches.txt); do
-            if (git ls-remote --exit-code --heads origin "$branch"); then
-              echo "Deleting leftover UpdateCLI branch - $branch";
-              git push origin --delete "$branch";
-            fi
-          done
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
       - name: Apply Updatecli
         # Never use '--debug' option, because it might leak the access tokens.
-        run: "updatecli pipeline apply --clean --config ./updatecli/updatecli.d/ --values ./updatecli/values.yaml"
+        run: |
+          updatecli pipeline apply --clean \
+            --config ./updatecli/updatecli.d/ \
+            --values ./updatecli/values.yaml \
+            --values "./updatecli/values.d/${BRANCH}.yaml"
         env:
+          BRANCH: ${{ matrix.branch }}
+          UPDATECLI_SCRIPTS_DIR: ${{ github.workspace }}/updatecli/scripts
           UPDATECLI_GITHUB_ACTOR: ${{ github.actor }}
           UPDATECLI_GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
 
-  dispatch-release-branches:
-    runs-on: ubuntu-latest
-    if: github.event_name == 'schedule'
-    strategy:
-      fail-fast: false
-      matrix:
-        branch:
-          - release-1.37
-          - release-1.36
-          - release-1.35
-          - release-1.34
-    steps:
-      - name: "Read Secrets"
-        uses: rancher-eio/read-vault-secrets@dfae8acd43a9e170fca5f90168da22f814fe4e9a # main
-        with:
-          secrets: |
-            secret/data/github/repo/${{ github.repository }}/github/app-credentials appId | APP_ID ;
-            secret/data/github/repo/${{ github.repository }}/github/app-credentials privateKey | PRIVATE_KEY
-
-      - name: Generate App Token
-        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
-        id: app-token
-        with:
-          client-id: ${{ env.APP_ID }}
-          private-key: ${{ env.PRIVATE_KEY }}
-
-      - name: Dispatch Updatecli on ${{ matrix.branch }}
-        run: gh workflow run updatecli.yml --ref ${{ matrix.branch }}
-        env:
-          GH_TOKEN: ${{ steps.app-token.outputs.token }}

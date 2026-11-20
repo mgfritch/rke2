@@ -25,8 +25,9 @@ sources:
   issue:
     name: "Get issue number"
     kind: "shell"
+    scmid: "rke2"
     spec:
-      command: bash ./updatecli/scripts/create-issue.sh rke2-canal {{ source "canal" }}
+      command: bash {{ requiredEnv "UPDATECLI_SCRIPTS_DIR" }}/create-issue.sh rke2-canal {{ source "canal" }}
       environments:
         - name: GH_TOKEN
           value: '{{ requiredEnv .github.token }}'
@@ -35,9 +36,10 @@ conditions:
   canalVersionShouldBeUpdated:
     name: "Check if Canal chart should be updated or not"
     kind: shell
+    scmid: "rke2"
     sourceid: canal
     spec:
-      command: bash ./updatecli/scripts/validate_version.sh rke2-canal
+      command: bash {{ requiredEnv "UPDATECLI_SCRIPTS_DIR" }}/validate_version.sh rke2-canal
 
 targets:
   canalCNI:
@@ -46,7 +48,7 @@ targets:
     scmid: "rke2"
     sourceid: canal
     spec:
-      command: bash ./updatecli/scripts/update_chart_and_images_cni.sh rke2-canal
+      command: bash {{ requiredEnv "UPDATECLI_SCRIPTS_DIR" }}/update_chart_and_images_cni.sh rke2-canal
       changedif:
         kind: file/checksum
         spec:

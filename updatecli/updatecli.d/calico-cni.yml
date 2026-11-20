@@ -15,19 +15,24 @@ scms:
 
 sources:
   calico:
-    name: "Get Calico chart version"
+    name: "Get Calico {{ .versions.calico | default "latest" }} chart version"
     kind: "helmchart"
     spec:
       url: https://rancher.github.io/rke2-charts
       name: rke2-calico
       versionfilter:
         kind: "regex"
-        pattern: ^v?\d+\.\d+\.\d+$
+{{- if .versions.calico }}
+        pattern: '^v?{{ regexQuoteMeta .versions.calico }}\.\d+$'
+{{- else }}
+        pattern: '^v?\d+\.\d+\.\d+$'
+{{- end }}
   issue:
     name: "Get issue number"
     kind: "shell"
+    scmid: "rke2"
     spec:
-      command: bash ./updatecli/scripts/create-issue.sh rke2-calico {{ source "calico" }}
+      command: bash {{ requiredEnv "UPDATECLI_SCRIPTS_DIR" }}/create-issue.sh rke2-calico {{ source "calico" }}
       environments:
         - name: GH_TOKEN
           value: '{{ requiredEnv .github.token }}'
@@ -36,9 +41,10 @@ conditions:
   calicoVersionShouldBeUpdated:
     name: "Check if Calico chart should be updated or not"
     kind: shell
+    scmid: "rke2"
     sourceid: calico
     spec:
-      command: bash ./updatecli/scripts/validate_version.sh rke2-calico
+      command: bash {{ requiredEnv "UPDATECLI_SCRIPTS_DIR" }}/validate_version.sh rke2-calico
 
 targets:
   calicoCNI:
@@ -47,7 +53,7 @@ targets:
     scmid: "rke2"
     sourceid: calico
     spec:
-      command: bash ./updatecli/scripts/update_chart_and_images_cni.sh rke2-calico
+      command: bash {{ requiredEnv "UPDATECLI_SCRIPTS_DIR" }}/update_chart_and_images_cni.sh rke2-calico
       environments:
         - name: GH_TOKEN
           value: '{{ requiredEnv .github.token }}'

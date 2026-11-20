@@ -1,0 +1,14 @@
+# Branch-specific values for the updatecli run against master.
+# Shared settings live in updatecli/values.yaml.
+github:
+  branch: "master"
+versions:
+  # Minor lines tracked for hardened images and charts on this branch.
+  containerd: "2.3"
+  etcd: "3.7"
+  ingressNginx: "1.15.2"
+  # Empty means track the latest release.
+  calico: ""
+  traefik: ""
+features:
+  multusCRD: true

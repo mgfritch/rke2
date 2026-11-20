@@ -3,7 +3,7 @@
 #   have "UPDATECLI_GITHUB_ACTOR" env set to your github username
 #   have "UPDATECLI_GITHUB_TOKEN" env set to your github token
 #   have the latest version of updatecli installed
-#   'updatecli diff -v updatecli/values.yaml -c updatecli/updatecli.d/vsphere-cpi.yml'
+#   'UPDATECLI_SCRIPTS_DIR=$PWD/updatecli/scripts updatecli diff -v updatecli/values.yaml -v updatecli/values.d/master.yaml -c updatecli/updatecli.d/vsphere-cpi.yml'
 # In the future, more useful files should be added to this directory.
 ---
 name: "Update vsphere csi/cpi charts and images"
@@ -24,6 +24,7 @@ sources:
   kubernetesMinor:
     name: "Get Kubernetes minor version from scripts/version.sh"
     kind: "file"
+    scmid: "rke2"
     spec:
       file: scripts/version.sh
       matchpattern: '(?m)^KUBERNETES_VERSION=\$\{KUBERNETES_VERSION:-v\d+\.\d+\.\d+[^}]*\}$'
@@ -35,7 +36,7 @@ sources:
     name: "Get vsphere-cpi chart version"
     kind: "shell"
     spec:
-      command: bash ./updatecli/scripts/retrieve_chart_version.sh rancher-vsphere-cpi
+      command: bash {{ requiredEnv "UPDATECLI_SCRIPTS_DIR" }}/retrieve_chart_version.sh rancher-vsphere-cpi
   vsphere-cpi-public-tag:
     name: "Get vsphere-cpi public image tag"
     kind: "shell"
@@ -43,15 +44,16 @@ sources:
       - kubernetesMinor
       - vsphere-cpi
     spec:
-      command: bash ./updatecli/scripts/retrieve_vsphere_image_tag.sh rancher-vsphere-cpi {{ source "vsphere-cpi" }} {{ source "kubernetesMinor" }} '.values.cloudControllerManager.tag'
+      command: bash {{ requiredEnv "UPDATECLI_SCRIPTS_DIR" }}/retrieve_vsphere_image_tag.sh rancher-vsphere-cpi {{ source "vsphere-cpi" }} {{ source "kubernetesMinor" }} '.values.cloudControllerManager.tag'
 
 conditions:
   vsphereCPIVersionShouldBeUpdated:
     name: "Check if vsphere-cpi chart should be updated or not"
     kind: shell
+    scmid: "rke2"
     sourceid: vsphere-cpi
     spec:
-      command: bash ./updatecli/scripts/validate_version.sh rancher-vsphere-cpi
+      command: bash {{ requiredEnv "UPDATECLI_SCRIPTS_DIR" }}/validate_version.sh rancher-vsphere-cpi
 
 targets:
   updateVsphereCPI:
@@ -60,7 +62,7 @@ targets:
     scmid: "rke2"
     sourceid: vsphere-cpi
     spec:
-      command: bash ./updatecli/scripts/update_chart_and_images_prime.sh rancher-vsphere-cpi {{ source "vsphere-cpi" }} {{ source "kubernetesMinor" }}
+      command: bash {{ requiredEnv "UPDATECLI_SCRIPTS_DIR" }}/update_chart_and_images_prime.sh rancher-vsphere-cpi {{ source "vsphere-cpi" }} {{ source "kubernetesMinor" }}
       changedif:
         kind: file/checksum
         spec:
